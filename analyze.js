@@ -1,21 +1,31 @@
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).end();
 
-  const { messages, system } = req.body;
-  const prompt = system + "\n\n" + messages[0].content;
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "Missing API key" });
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
-    {
+  try {
+    const { messages, system } = req.body;
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
+        model: "meta-llama/llama-3-8b-instruct:free",
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: messages[0].content }
+        ]
       })
-    }
-  );
+    });
 
-  const data = await response.json();
-  const text = data.candidates[0].content.parts[0].text;
-  res.json({ content: [{ text }] });
+    const data = await response.json();
+    const text = data.choices[0].message.content;
+    res.json({ content: [{ text }] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 }
